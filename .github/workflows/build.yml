@@ -57,6 +57,7 @@ jobs:
     needs: check
     env:
       app_version: ${{ needs.check.outputs.app_version }}
+      ARTIFACT_DIR: artifacts
 
     steps:
       - uses: actions/checkout@v7
@@ -75,8 +76,7 @@ jobs:
           DATE=$(date -u -r RELEASE_NOTES '+%Y-%m-%d-%H:%M UTC')
           echo "$VERSION"
           export CGO_ENABLED=0
-          export ARTIFACT_DIR=artifacts
-          mkdir -p "$ARTIFACT_DIR"
+          mkdir -p "${ARTIFACT_DIR}"
           for arch in amd64 arm64 loong64 ppc64le riscv64 s390x; do
             GOOS=linux GOARCH=${arch} go build -mod=readonly \
               -ldflags="-X \"main.Version=${VERSION}\" -X \"main.BuildTime=${DATE}\"" \
@@ -92,36 +92,31 @@ jobs:
               github.com/cloudflare/cloudflared/cmd/cloudflared
           done
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: cloudflared-linux
-          path: artifacts
+      - name: Create artifacts
+        run: |
+          cd "${ARTIFACT_DIR}"
+          for f in cloudflared*; do
+            tar -czf "${f}.tgz" "$f"
+          done
 
-  release:
-    if: needs.check.outputs.app_build == '1'
-    runs-on: ubuntu-slim
-    needs:
-      - check
-      - build
-    env:
-      app_version: ${{ needs.check.outputs.app_version }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Download release
-        uses: actions/download-artifact@v8
-        with:
-          pattern: cloudflared-*
-          path: dist
-          merge-multiple: true
+      - name: Create checksums
+        run: |
+          cd "${ARTIFACT_DIR}"
+          {
+            echo "### SHA256 Checksums:"
+            echo '```'
+            sha256sum cloudflared* | awk '{print $2 ": " $1}'
+            echo '```'
+          } > ../RELEASE_BODY.md
 
       - name: Create release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          REPO_NAME=${{ github.repository }}
           TAG_NAME="${{ env.app_version }}"
           gh release create "${TAG_NAME}" \
-            --generate-notes \
+            --repo "${REPO_NAME}" \
             --title "${TAG_NAME}" \
-            dist/*
+            --notes-file RELEASE_BODY.md \
+            "${ARTIFACT_DIR}"/*

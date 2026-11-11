@@ -47,7 +47,7 @@ jobs:
       - name: Check Release
         id: check-release
         run: |
-          gh release view ${app_version} -R ${{ github.repository }} | grep ${{ env.app_name }}-.*-linux-loong64 >/dev/null 2>&1 || echo "app_build=1" >> $GITHUB_OUTPUT
+          gh release view ${app_version} -R ${{ github.repository }} | grep ${{ env.app_name }}-linux-loong64 >/dev/null 2>&1 || echo "app_build=1" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
